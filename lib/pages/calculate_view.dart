@@ -129,9 +129,7 @@ class _CalculateViewState extends State<CalculateView> {
               _profileBadge(),
               const SizedBox(height: 16),
 
-              _vehicleSection(),
-              const SizedBox(height: 16),
-
+              // ✅ sadece buradaki sıralama değişti
               _usageSection(),
               const SizedBox(height: 16),
 
@@ -142,6 +140,10 @@ class _CalculateViewState extends State<CalculateView> {
               const SizedBox(height: 24),
 
               _resultCard(),
+              const SizedBox(height: 32),
+
+              // ✅ Manual override en altta
+              _vehicleSection(),
             ],
           ),
         );
