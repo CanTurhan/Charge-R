@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "802615177156",
+    "project_id": "charge-r",
+    "storage_bucket": "charge-r.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:802615177156:android:d8652215be8fe8483bbe91",
+        "android_client_info": {
+          "package_name": "com.example.charge_r"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDdOJUlBt5AqwvS3LKRSsmqFn2KJA9uh2s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,57 @@
+name: charge_r
+description: "Charge-R EV Range Calculator"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Firebase (şu an aktif kullanılmıyor ama config hatasını çözer)
+  firebase_core: ^3.6.0
+
+  # Local storage
+  shared_preferences: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # App icon generator
+  flutter_launcher_icons: ^0.14.1
+
+  # Native splash screen
+  flutter_native_splash: ^2.4.3
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/vehicles.json
+    - assets/app_icon.png
+
+# APP ICON CONFIG
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"
+  remove_alpha_ios: true
+
+# SPLASH SCREEN CONFIG (LOGONUN GERÇEK ARKA PLANI)
+flutter_native_splash:
+  color: "#010101"
+  image: assets/app_icon.png
+
+  android_12:
+    color: "#010101"
+    image: assets/app_icon.png
+
+  ios: true
+  android: true

@@ -1,0 +1,46 @@
+[
+  { "brand": "Tesla", "model": "Model 3", "version": "Standard Range", "battery_kwh": 60, "consumption_kwh_100km": 15.0 },
+  { "brand": "Tesla", "model": "Model 3", "version": "Long Range", "battery_kwh": 75, "consumption_kwh_100km": 14.5 },
+  { "brand": "Tesla", "model": "Model 3", "version": "Performance", "battery_kwh": 75, "consumption_kwh_100km": 16.5 },
+
+  { "brand": "Tesla", "model": "Model Y", "version": "Standard Range", "battery_kwh": 60, "consumption_kwh_100km": 16.5 },
+  { "brand": "Tesla", "model": "Model Y", "version": "Long Range", "battery_kwh": 75, "consumption_kwh_100km": 16.0 },
+  { "brand": "Tesla", "model": "Model Y", "version": "Performance", "battery_kwh": 75, "consumption_kwh_100km": 18.0 },
+
+  { "brand": "Tesla", "model": "Model S", "version": "Long Range", "battery_kwh": 100, "consumption_kwh_100km": 19.0 },
+  { "brand": "Tesla", "model": "Model X", "version": "Long Range", "battery_kwh": 100, "consumption_kwh_100km": 21.0 },
+
+  { "brand": "Opel", "model": "e-Corsa", "version": "50 kWh", "battery_kwh": 50, "consumption_kwh_100km": 16.2 },
+  { "brand": "Opel", "model": "Mokka-e", "version": "50 kWh", "battery_kwh": 50, "consumption_kwh_100km": 17.5 },
+  { "brand": "Opel", "model": "Astra Electric", "version": "54 kWh", "battery_kwh": 54, "consumption_kwh_100km": 16.8 },
+
+  { "brand": "Citroen", "model": "e-C4", "version": "50 kWh", "battery_kwh": 50, "consumption_kwh_100km": 17.0 },
+  { "brand": "Citroen", "model": "e-C4 X", "version": "54 kWh", "battery_kwh": 54, "consumption_kwh_100km": 16.5 },
+
+  { "brand": "Kia", "model": "EV6", "version": "58 kWh", "battery_kwh": 58, "consumption_kwh_100km": 17.5 },
+  { "brand": "Kia", "model": "EV6", "version": "77.4 kWh", "battery_kwh": 77.4, "consumption_kwh_100km": 18.0 },
+  { "brand": "Kia", "model": "EV9", "version": "99.8 kWh", "battery_kwh": 99.8, "consumption_kwh_100km": 22.0 },
+  { "brand": "Kia", "model": "Niro EV", "version": "64.8 kWh", "battery_kwh": 64.8, "consumption_kwh_100km": 17.0 },
+
+  { "brand": "Hyundai", "model": "Ioniq 5", "version": "58 kWh", "battery_kwh": 58, "consumption_kwh_100km": 17.5 },
+  { "brand": "Hyundai", "model": "Ioniq 5", "version": "77.4 kWh", "battery_kwh": 77.4, "consumption_kwh_100km": 18.2 },
+  { "brand": "Hyundai", "model": "Ioniq 6", "version": "77.4 kWh", "battery_kwh": 77.4, "consumption_kwh_100km": 16.5 },
+  { "brand": "Hyundai", "model": "Kona Electric", "version": "65.4 kWh", "battery_kwh": 65.4, "consumption_kwh_100km": 16.7 },
+
+  { "brand": "BYD", "model": "ATTO 3", "version": "60.5 kWh", "battery_kwh": 60.5, "consumption_kwh_100km": 17.0 },
+  { "brand": "BYD", "model": "Dolphin", "version": "60.4 kWh", "battery_kwh": 60.4, "consumption_kwh_100km": 15.8 },
+  { "brand": "BYD", "model": "Seal", "version": "82.5 kWh", "battery_kwh": 82.5, "consumption_kwh_100km": 18.5 },
+
+  { "brand": "Volkswagen", "model": "ID.3", "version": "58 kWh", "battery_kwh": 58, "consumption_kwh_100km": 16.0 },
+  { "brand": "Volkswagen", "model": "ID.4", "version": "77 kWh", "battery_kwh": 77, "consumption_kwh_100km": 18.5 },
+
+  { "brand": "Renault", "model": "Megane E-Tech", "version": "60 kWh", "battery_kwh": 60, "consumption_kwh_100km": 16.5 },
+  { "brand": "Renault", "model": "Zoe", "version": "52 kWh", "battery_kwh": 52, "consumption_kwh_100km": 16.8 },
+
+  { "brand": "BMW", "model": "i4", "version": "83.9 kWh", "battery_kwh": 83.9, "consumption_kwh_100km": 18.0 },
+  { "brand": "BMW", "model": "iX1", "version": "64.7 kWh", "battery_kwh": 64.7, "consumption_kwh_100km": 18.8 }
+  ,
+  { "brand": "TOGG", "model": "T10X", "version": "Standard Range RWD", "battery_kwh": 52.4, "consumption_kwh_100km": 18.5 },
+  { "brand": "TOGG", "model": "T10X", "version": "Long Range RWD", "battery_kwh": 88.5, "consumption_kwh_100km": 19.5 }
+
+]
