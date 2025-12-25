@@ -9,6 +9,7 @@ class UserPreferences {
   static const _yearKey = "vehicle_year";
   static const _kmKey = "vehicle_km";
 
+  // -------- SAVE --------
   static Future<void> saveVehicleProfile({
     required VehicleModel vehicle,
     required int year,
@@ -23,6 +24,7 @@ class UserPreferences {
     await prefs.setInt(_kmKey, km);
   }
 
+  // -------- LOAD --------
   static Future<UserVehicleProfile?> loadVehicleProfile(
     List<VehicleModel> allVehicles,
   ) async {
@@ -42,9 +44,14 @@ class UserPreferences {
       return null;
     }
 
-    final vehicle = allVehicles.firstWhere(
-      (v) => v.brand == brand && v.model == model && v.version == version,
-    );
+    VehicleModel? vehicle;
+    try {
+      vehicle = allVehicles.firstWhere(
+        (v) => v.brand == brand && v.model == model && v.version == version,
+      );
+    } catch (_) {
+      return null;
+    }
 
     return UserVehicleProfile(
       vehicle: vehicle,
