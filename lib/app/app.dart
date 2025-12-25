@@ -16,7 +16,7 @@ class ChargeRApp extends StatelessWidget {
         fontFamily: "Inter",
         textTheme: const TextTheme(bodyMedium: AppTextStyles.body),
         colorScheme: const ColorScheme.dark(
-          background: AppColors.background,
+          surface: AppColors.background,
           primary: AppColors.accent,
         ),
       ),

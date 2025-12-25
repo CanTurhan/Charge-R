@@ -221,7 +221,7 @@ class _CalculateViewState extends State<CalculateView> {
       child: Column(
         children: [
           DropdownButtonFormField<String>(
-            value: selectedBrand,
+            initialValue: selectedBrand,
             hint: const Text("Brand"),
             items: VehicleData.brands
                 .map((b) => DropdownMenuItem(value: b, child: Text(b)))

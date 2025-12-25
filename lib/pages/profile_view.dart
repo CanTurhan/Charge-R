@@ -18,10 +18,12 @@ class _ProfileViewState extends State<ProfileView> {
   String? selectedModel;
   VehicleModel? selectedVersion;
 
-  final yearController = TextEditingController();
+  int? selectedYear;
   final kmController = TextEditingController();
 
   UserVehicleProfile? previewProfile;
+
+  final int currentYear = DateTime.now().year;
 
   @override
   Widget build(BuildContext context) {
@@ -29,7 +31,7 @@ class _ProfileViewState extends State<ProfileView> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // ---------- HEADER WITH SETTINGS ----------
+          // ---------- HEADER ----------
           Row(
             children: [
               IconButton(
@@ -42,7 +44,7 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           const SizedBox(height: 24),
 
-          // Brand
+          // ---------- BRAND ----------
           DropdownButtonFormField<String>(
             initialValue: selectedBrand,
             hint: const Text("Brand"),
@@ -54,13 +56,14 @@ class _ProfileViewState extends State<ProfileView> {
                 selectedBrand = v;
                 selectedModel = null;
                 selectedVersion = null;
+                selectedYear = null;
                 previewProfile = null;
               });
             },
           ),
           const SizedBox(height: 12),
 
-          // Model
+          // ---------- MODEL ----------
           DropdownButtonFormField<String>(
             initialValue: selectedModel,
             hint: const Text("Model"),
@@ -79,7 +82,7 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           const SizedBox(height: 12),
 
-          // Version
+          // ---------- VERSION ----------
           DropdownButtonFormField<VehicleModel>(
             initialValue: selectedVersion,
             hint: const Text("Version / Battery"),
@@ -107,22 +110,40 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           const SizedBox(height: 16),
 
-          TextField(
-            controller: yearController,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: "Vehicle year"),
-            onChanged: (_) => _updatePreview(),
+          // ---------- YEAR (DROPDOWN) ----------
+          DropdownButtonFormField<int>(
+            initialValue: selectedYear,
+            hint: const Text("Vehicle year"),
+            items: List.generate(currentYear - 1980 + 1, (index) {
+              final year = currentYear - index;
+              return DropdownMenuItem(
+                value: year,
+                child: Text(year.toString()),
+              );
+            }),
+            onChanged: (v) {
+              setState(() {
+                selectedYear = v;
+                _updatePreview();
+              });
+            },
           ),
           const SizedBox(height: 12),
 
+          // ---------- KM ----------
           TextField(
             controller: kmController,
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
             decoration: const InputDecoration(labelText: "Mileage (km)"),
+            onSubmitted: (_) {
+              FocusScope.of(context).unfocus();
+            },
             onChanged: (_) => _updatePreview(),
           ),
           const SizedBox(height: 24),
 
+          // ---------- PREVIEW ----------
           if (previewProfile != null)
             Container(
               padding: const EdgeInsets.all(14),
@@ -140,18 +161,22 @@ class _ProfileViewState extends State<ProfileView> {
 
           const SizedBox(height: 24),
 
+          // ---------- SAVE ----------
           ElevatedButton(
-            onPressed: selectedVersion == null
+            onPressed:
+                selectedVersion == null ||
+                    selectedYear == null ||
+                    kmController.text.isEmpty
                 ? null
                 : () async {
-                    final year = int.tryParse(yearController.text);
-                    final km = int.tryParse(kmController.text);
+                    FocusScope.of(context).unfocus();
 
-                    if (year == null || km == null) return;
+                    final km = int.tryParse(kmController.text);
+                    if (km == null) return;
 
                     await UserPreferences.saveVehicleProfile(
                       vehicle: selectedVersion!,
-                      year: year,
+                      year: selectedYear!,
                       km: km,
                     );
 
@@ -168,11 +193,11 @@ class _ProfileViewState extends State<ProfileView> {
     );
   }
 
+  // ---------- PREVIEW LOGIC ----------
   void _updatePreview() {
-    final year = int.tryParse(yearController.text);
     final km = int.tryParse(kmController.text);
 
-    if (selectedVersion == null || year == null || km == null) {
+    if (selectedVersion == null || selectedYear == null || km == null) {
       setState(() => previewProfile = null);
       return;
     }
@@ -180,13 +205,13 @@ class _ProfileViewState extends State<ProfileView> {
     setState(() {
       previewProfile = UserVehicleProfile(
         vehicle: selectedVersion!,
-        vehicleYear: year,
+        vehicleYear: selectedYear!,
         mileageKm: km,
       );
     });
   }
 
-  // ---------- PRIVACY SETTINGS ----------
+  // ---------- PRIVACY ----------
   void _openPrivacySettings() {
     showModalBottomSheet(
       context: context,
@@ -205,12 +230,10 @@ class _ProfileViewState extends State<ProfileView> {
               SizedBox(height: 12),
               Text(
                 "Charge-R does not collect, store, or transmit any personal data.\n\n"
-                "All vehicle information you enter is stored locally on your device "
-                "and never leaves your phone.\n\n"
-                "No analytics, tracking, or third-party data sharing is used.",
+                "All vehicle information is stored locally on your device.\n\n"
+                "No analytics, tracking, or third-party sharing is used.",
                 style: AppTextStyles.body,
               ),
-              SizedBox(height: 12),
             ],
           ),
         );
