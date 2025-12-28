@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/open_charge_map_service.dart';
 import '../theme/text_styles.dart';
@@ -21,8 +22,6 @@ class _StationsViewState extends State<StationsView> {
 
   bool _loading = false;
   String? _error;
-
-  bool _dcOnly = false; // 🔥 YENİ
 
   LatLng _center = const LatLng(41.0082, 28.9784);
   List<OcmStation> _stations = [];
@@ -50,6 +49,11 @@ class _StationsViewState extends State<StationsView> {
         return;
       }
 
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
+        throw Exception("Location permission denied");
+      }
+
       final pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
@@ -63,12 +67,10 @@ class _StationsViewState extends State<StationsView> {
 
       await _loadStationsForCenter(latLng);
     } catch (e) {
-      if (!mounted) return;
       setState(() {
         _error = e.toString().replaceAll('Exception: ', '');
       });
     } finally {
-      if (!mounted) return;
       setState(() => _loading = false);
     }
   }
@@ -80,13 +82,35 @@ class _StationsViewState extends State<StationsView> {
       final stations = await OpenChargeMapService.fetchNearby(
         lat: center.latitude,
         lng: center.longitude,
+        distanceKm: 20,
       );
 
       if (!mounted) return;
       setState(() => _stations = stations);
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      setState(() {
+        _error = e.toString().replaceAll('Exception: ', '');
+      });
+    }
+  }
+
+  // ---------------- NAVIGATION ----------------
+
+  Future<void> _navigateToStation(LatLng point) async {
+    final lat = point.latitude;
+    final lng = point.longitude;
+
+    final appleMaps = Uri.parse('https://maps.apple.com/?daddr=$lat,$lng');
+    final googleMaps = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng',
+    );
+
+    if (await canLaunchUrl(appleMaps)) {
+      await launchUrl(appleMaps, mode: LaunchMode.externalApplication);
+    } else if (await canLaunchUrl(googleMaps)) {
+      await launchUrl(googleMaps, mode: LaunchMode.externalApplication);
+    } else {
+      throw Exception("No map application found");
     }
   }
 
@@ -107,13 +131,10 @@ class _StationsViewState extends State<StationsView> {
           children: [
             Text(station.title, style: AppTextStyles.title),
             const SizedBox(height: 8),
-            Text(
-              station.hasDC ? "DC Fast Charging" : "AC Charging",
-              style: AppTextStyles.caption,
-            ),
+            Text("Charging station", style: AppTextStyles.caption),
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: () {},
+              onPressed: () => _navigateToStation(station.point),
               icon: const Icon(Icons.navigation),
               label: const Text("Navigate"),
             ),
@@ -152,23 +173,12 @@ class _StationsViewState extends State<StationsView> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredStations = _dcOnly
-        ? _stations.where((s) => s.hasDC).toList()
-        : _stations;
-
     return SafeArea(
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text("Stations", style: AppTextStyles.headline),
-          ),
-
-          // 🔥 DC FILTER
-          SwitchListTile(
-            title: const Text("DC fast charging only"),
-            value: _dcOnly,
-            onChanged: (v) => setState(() => _dcOnly = v),
           ),
 
           Expanded(
@@ -179,6 +189,7 @@ class _StationsViewState extends State<StationsView> {
                 initialZoom: 12,
                 onPositionChanged: (pos, hasGesture) {
                   if (!hasGesture) return;
+
                   _mapMoveDebounce?.cancel();
                   _mapMoveDebounce = Timer(
                     const Duration(milliseconds: 700),
@@ -206,7 +217,7 @@ class _StationsViewState extends State<StationsView> {
                         size: 36,
                       ),
                     ),
-                    ...filteredStations.map(
+                    ..._stations.map(
                       (s) => Marker(
                         width: 44,
                         height: 44,
@@ -214,11 +225,9 @@ class _StationsViewState extends State<StationsView> {
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => _openStationDetail(s),
-                          child: Icon(
+                          child: const Icon(
                             Icons.ev_station,
-                            color: s.hasDC
-                                ? Colors.greenAccent
-                                : Colors.lightGreen,
+                            color: Colors.greenAccent,
                             size: 32,
                           ),
                         ),
@@ -235,11 +244,7 @@ class _StationsViewState extends State<StationsView> {
             child: ElevatedButton(
               onPressed: _loading ? null : _useMyLocation,
               child: _loading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const CircularProgressIndicator(strokeWidth: 2)
                   : const Text("Use my location"),
             ),
           ),
