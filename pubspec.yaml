@@ -19,9 +19,17 @@ dependencies:
   # Local storage
   shared_preferences: ^2.3.2
 
+  # -------- STATIONS (MAP + LOCATION) --------
+  http: ^1.2.2
+  geolocator: ^13.0.2
+  flutter_map: ^8.2.2
+  latlong2: ^0.9.1
+  url_launcher: ^6.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
   flutter_lints: ^6.0.0
 
   # App icon generator
@@ -44,7 +52,7 @@ flutter_icons:
   image_path: "assets/app_icon.png"
   remove_alpha_ios: true
 
-# SPLASH SCREEN CONFIG (LOGONUN GERÇEK ARKA PLANI)
+# SPLASH SCREEN CONFIG
 flutter_native_splash:
   color: "#010101"
   image: assets/app_icon.png
