@@ -6,18 +6,32 @@ class OcmStation {
   final int id;
   final String title;
   final LatLng point;
+  final bool hasDC;
 
-  OcmStation({required this.id, required this.title, required this.point});
+  OcmStation({
+    required this.id,
+    required this.title,
+    required this.point,
+    required this.hasDC,
+  });
 
   factory OcmStation.fromJson(Map<String, dynamic> json) {
     final addr = json['AddressInfo'];
+    final connections = json['Connections'] as List<dynamic>? ?? [];
+
+    final bool dcAvailable = connections.any((c) {
+      final level = c['Level'];
+      return level != null && level['IsFastChargeCapable'] == true;
+    });
+
     return OcmStation(
       id: json['ID'],
-      title: addr['Title'] ?? 'Charging Station',
+      title: addr?['Title'] ?? 'Charging Station',
       point: LatLng(
-        (addr['Latitude'] as num).toDouble(),
-        (addr['Longitude'] as num).toDouble(),
+        (addr?['Latitude'] as num).toDouble(),
+        (addr?['Longitude'] as num).toDouble(),
       ),
+      hasDC: dcAvailable,
     );
   }
 }

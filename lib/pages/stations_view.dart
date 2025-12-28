@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -23,7 +22,9 @@ class _StationsViewState extends State<StationsView> {
   bool _loading = false;
   String? _error;
 
-  LatLng _center = const LatLng(41.0082, 28.9784); // İstanbul
+  bool _dcOnly = false; // 🔥 YENİ
+
+  LatLng _center = const LatLng(41.0082, 28.9784);
   List<OcmStation> _stations = [];
 
   // ---------------- LOCATION ----------------
@@ -47,11 +48,6 @@ class _StationsViewState extends State<StationsView> {
       if (permission == LocationPermission.deniedForever) {
         _showOpenSettingsDialog();
         return;
-      }
-
-      if (permission != LocationPermission.always &&
-          permission != LocationPermission.whileInUse) {
-        throw Exception("Location permission denied");
       }
 
       final pos = await Geolocator.getCurrentPosition(
@@ -84,20 +80,17 @@ class _StationsViewState extends State<StationsView> {
       final stations = await OpenChargeMapService.fetchNearby(
         lat: center.latitude,
         lng: center.longitude,
-        distanceKm: 20,
       );
 
       if (!mounted) return;
       setState(() => _stations = stations);
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString().replaceAll('Exception: ', '');
-      });
+      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
     }
   }
 
-  // ---------------- STATION DETAIL ----------------
+  // ---------------- DETAIL ----------------
 
   void _openStationDetail(OcmStation station) {
     showModalBottomSheet(
@@ -114,12 +107,13 @@ class _StationsViewState extends State<StationsView> {
           children: [
             Text(station.title, style: AppTextStyles.title),
             const SizedBox(height: 8),
-            Text("Charging station", style: AppTextStyles.caption),
+            Text(
+              station.hasDC ? "DC Fast Charging" : "AC Charging",
+              style: AppTextStyles.caption,
+            ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: () {
-                // Route / navigation sonra eklenecek
-              },
+              onPressed: () {},
               icon: const Icon(Icons.navigation),
               label: const Text("Navigate"),
             ),
@@ -158,12 +152,23 @@ class _StationsViewState extends State<StationsView> {
 
   @override
   Widget build(BuildContext context) {
+    final filteredStations = _dcOnly
+        ? _stations.where((s) => s.hasDC).toList()
+        : _stations;
+
     return SafeArea(
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text("Stations", style: AppTextStyles.headline),
+          ),
+
+          // 🔥 DC FILTER
+          SwitchListTile(
+            title: const Text("DC fast charging only"),
+            value: _dcOnly,
+            onChanged: (v) => setState(() => _dcOnly = v),
           ),
 
           Expanded(
@@ -174,7 +179,6 @@ class _StationsViewState extends State<StationsView> {
                 initialZoom: 12,
                 onPositionChanged: (pos, hasGesture) {
                   if (!hasGesture) return;
-
                   _mapMoveDebounce?.cancel();
                   _mapMoveDebounce = Timer(
                     const Duration(milliseconds: 700),
@@ -192,7 +196,6 @@ class _StationsViewState extends State<StationsView> {
                 ),
                 MarkerLayer(
                   markers: [
-                    // USER LOCATION
                     Marker(
                       width: 44,
                       height: 44,
@@ -203,9 +206,7 @@ class _StationsViewState extends State<StationsView> {
                         size: 36,
                       ),
                     ),
-
-                    // STATIONS (TIKLANABİLİR)
-                    ..._stations.map(
+                    ...filteredStations.map(
                       (s) => Marker(
                         width: 44,
                         height: 44,
@@ -213,9 +214,11 @@ class _StationsViewState extends State<StationsView> {
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => _openStationDetail(s),
-                          child: const Icon(
+                          child: Icon(
                             Icons.ev_station,
-                            color: Colors.greenAccent,
+                            color: s.hasDC
+                                ? Colors.greenAccent
+                                : Colors.lightGreen,
                             size: 32,
                           ),
                         ),
