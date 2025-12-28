@@ -18,13 +18,12 @@ class StationsView extends StatefulWidget {
 
 class _StationsViewState extends State<StationsView> {
   final MapController _mapController = MapController();
-
   Timer? _mapMoveDebounce;
 
   bool _loading = false;
   String? _error;
 
-  LatLng _center = const LatLng(41.0082, 28.9784); // İstanbul default
+  LatLng _center = const LatLng(41.0082, 28.9784); // İstanbul
   List<OcmStation> _stations = [];
 
   // ---------------- LOCATION ----------------
@@ -36,12 +35,11 @@ class _StationsViewState extends State<StationsView> {
     });
 
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
+      if (!await Geolocator.isLocationServiceEnabled()) {
         throw Exception("Location services are disabled");
       }
 
-      LocationPermission permission = await Geolocator.checkPermission();
+      var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
@@ -99,7 +97,37 @@ class _StationsViewState extends State<StationsView> {
     }
   }
 
-  // ---------------- UI ----------------
+  // ---------------- STATION DETAIL ----------------
+
+  void _openStationDetail(OcmStation station) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(station.title, style: AppTextStyles.title),
+            const SizedBox(height: 8),
+            Text("Charging station", style: AppTextStyles.caption),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                // Route / navigation sonra eklenecek
+              },
+              icon: const Icon(Icons.navigation),
+              label: const Text("Navigate"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showOpenSettingsDialog() {
     showDialog(
@@ -126,11 +154,10 @@ class _StationsViewState extends State<StationsView> {
     );
   }
 
+  // ---------------- UI ----------------
+
   @override
   Widget build(BuildContext context) {
-    final bool showEmptyState =
-        !_loading && _error == null && _stations.isEmpty;
-
     return SafeArea(
       child: Column(
         children: [
@@ -140,114 +167,77 @@ class _StationsViewState extends State<StationsView> {
           ),
 
           Expanded(
-            child: Stack(
-              children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _center,
-                    initialZoom: 12,
-                    onPositionChanged: (position, hasGesture) {
-                      if (!hasGesture) return;
+            child: FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _center,
+                initialZoom: 12,
+                onPositionChanged: (pos, hasGesture) {
+                  if (!hasGesture) return;
 
-                      _mapMoveDebounce?.cancel();
-                      _mapMoveDebounce = Timer(
-                        const Duration(milliseconds: 700),
-                        () {
-                          final c = position.center;
-                          if (c != null) {
-                            _loadStationsForCenter(c);
-                          }
-                        },
-                      );
+                  _mapMoveDebounce?.cancel();
+                  _mapMoveDebounce = Timer(
+                    const Duration(milliseconds: 700),
+                    () {
+                      final c = pos.center;
+                      if (c != null) _loadStationsForCenter(c);
                     },
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.canturhan.charge_r',
+                  );
+                },
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.canturhan.charge_r',
+                ),
+                MarkerLayer(
+                  markers: [
+                    // USER LOCATION
+                    Marker(
+                      width: 44,
+                      height: 44,
+                      point: _center,
+                      child: const Icon(
+                        Icons.my_location,
+                        color: AppColors.accent,
+                        size: 36,
+                      ),
                     ),
-                    MarkerLayer(
-                      markers: [
-                        // Kullanıcı
-                        Marker(
-                          width: 44,
-                          height: 44,
-                          point: _center,
-                          child: const Icon(
-                            Icons.my_location,
-                            color: AppColors.accent,
-                            size: 36,
-                          ),
-                        ),
 
-                        // İstasyonlar
-                        ..._stations.map(
-                          (s) => Marker(
-                            width: 36,
-                            height: 36,
-                            point: s.point,
-                            child: const Icon(
-                              Icons.ev_station,
-                              color: Colors.greenAccent,
-                              size: 28,
-                            ),
+                    // STATIONS (TIKLANABİLİR)
+                    ..._stations.map(
+                      (s) => Marker(
+                        width: 44,
+                        height: 44,
+                        point: s.point,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _openStationDetail(s),
+                          child: const Icon(
+                            Icons.ev_station,
+                            color: Colors.greenAccent,
+                            size: 32,
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
-
-                if (showEmptyState)
-                  Positioned(
-                    bottom: 16,
-                    left: 16,
-                    right: 16,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Text(
-                        "Charging station data is temporarily unavailable.\n"
-                        "Data provided by Open Charge Map.",
-                        style: AppTextStyles.caption,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
 
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              border: Border(top: BorderSide(color: AppColors.border)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (_error != null) ...[
-                  Text(_error!, style: AppTextStyles.caption),
-                  const SizedBox(height: 8),
-                ],
-                ElevatedButton(
-                  onPressed: _loading ? null : _useMyLocation,
-                  child: _loading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text("Use my location"),
-                ),
-              ],
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: ElevatedButton(
+              onPressed: _loading ? null : _useMyLocation,
+              child: _loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text("Use my location"),
             ),
           ),
         ],
