@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 
-import '../theme/colors.dart';
+import '../services/geocoding_service.dart';
+import '../services/open_charge_map_service.dart';
+import '../utils/route_utils.dart';
 import '../theme/text_styles.dart';
 
 class RoutePlannerView extends StatefulWidget {
@@ -15,77 +18,99 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
   final TextEditingController _startController = TextEditingController();
   final TextEditingController _destinationController = TextEditingController();
 
-  bool _usingCurrentLocation = true;
-  bool _loadingLocation = false;
+  bool _useCurrentLocation = true;
+  bool _loading = false;
+  String? _error;
 
   int _stops = 2;
   double _arrivalPercent = 40;
 
-  String? _error;
+  LatLng? _startLatLng;
+  LatLng? _destinationLatLng;
 
-  @override
-  void initState() {
-    super.initState();
-    _setCurrentLocationAsStart();
-  }
-
-  // ---------------- LOCATION ----------------
+  // ---------------- CURRENT LOCATION ----------------
 
   Future<void> _setCurrentLocationAsStart() async {
+    final permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw Exception("Location permission denied");
+    }
+
+    final pos = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
     setState(() {
-      _loadingLocation = true;
-      _usingCurrentLocation = true;
+      _useCurrentLocation = true;
+      _startLatLng = LatLng(pos.latitude, pos.longitude);
+      _startController.text = "Current location";
+    });
+  }
+
+  // ---------------- PLAN ROUTE ----------------
+
+  Future<void> _planRoute() async {
+    setState(() {
+      _loading = true;
       _error = null;
     });
 
     try {
-      final permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        setState(() => _error = "Location permission denied");
-        return;
+      // START
+      if (_useCurrentLocation) {
+        if (_startLatLng == null) {
+          await _setCurrentLocationAsStart();
+        }
+      } else {
+        if (_startController.text.trim().isEmpty) {
+          throw Exception("Enter a start location");
+        }
+
+        _startLatLng = await GeocodingService.addressToLatLng(
+          _startController.text,
+        );
+
+        if (_startLatLng == null) {
+          throw Exception("Start location not found");
+        }
       }
 
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+      // DESTINATION
+      if (_destinationController.text.trim().isEmpty) {
+        throw Exception("Enter a destination");
+      }
+
+      _destinationLatLng = await GeocodingService.addressToLatLng(
+        _destinationController.text,
       );
 
+      if (_destinationLatLng == null) {
+        throw Exception("Destination not found");
+      }
+
+      // STOPS
+      final stops = RouteUtils.splitRoute(
+        start: _startLatLng!,
+        end: _destinationLatLng!,
+        stops: _stops,
+      );
+
+      for (int i = 0; i < stops.length; i++) {
+        final station = await OpenChargeMapService.findClosestStation(
+          lat: stops[i].latitude,
+          lng: stops[i].longitude,
+        );
+
+        debugPrint("STOP ${i + 1}: ${station?.title}");
+      }
+    } catch (e) {
       setState(() {
-        _startController.text =
-            "Current location (${pos.latitude.toStringAsFixed(4)}, "
-            "${pos.longitude.toStringAsFixed(4)})";
+        _error = e.toString().replaceAll('Exception: ', '');
       });
-    } catch (_) {
-      setState(() => _error = "Failed to get current location");
     } finally {
-      setState(() => _loadingLocation = false);
+      setState(() => _loading = false);
     }
-  }
-
-  // ---------------- ACTION ----------------
-
-  void _onCalculate() {
-    setState(() => _error = null);
-
-    if (_destinationController.text.trim().isEmpty) {
-      setState(() => _error = "Please enter a destination");
-      return;
-    }
-
-    if (_stops == 0 && _arrivalPercent > 50) {
-      setState(() {
-        _error =
-            "Arriving with ${_arrivalPercent.round()}% without charging stops "
-            "is likely not possible.";
-      });
-      return;
-    }
-
-    // Şimdilik sadece logluyoruz
-    debugPrint("START: ${_startController.text}");
-    debugPrint("DESTINATION: ${_destinationController.text}");
-    debugPrint("STOPS: $_stops");
-    debugPrint("ARRIVAL %: ${_arrivalPercent.round()}");
   }
 
   // ---------------- UI ----------------
@@ -93,127 +118,80 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: SingleChildScrollView(
+      child: ListView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Route Planner", style: AppTextStyles.headline),
-            const SizedBox(height: 24),
+        children: [
+          Text("Route Planner", style: AppTextStyles.headline),
+          const SizedBox(height: 24),
 
-            // ---------- START ----------
-            Text("Start", style: AppTextStyles.caption),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _startController,
-                    onChanged: (_) {
-                      setState(() => _usingCurrentLocation = false);
-                    },
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.place),
-                      hintText: "Current location or enter address",
-                      filled: true,
-                      fillColor: AppColors.surface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: AppColors.border),
-                      ),
-                    ),
+          // START
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _startController,
+                  decoration: const InputDecoration(
+                    labelText: "Start",
+                    hintText: "Current location or address",
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: "Use current location",
-                  onPressed: _loadingLocation
-                      ? null
-                      : _setCurrentLocationAsStart,
-                  icon: _loadingLocation
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          Icons.my_location,
-                          color: _usingCurrentLocation
-                              ? AppColors.accent
-                              : Colors.white70,
-                        ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-
-            // ---------- DESTINATION ----------
-            Text("Destination", style: AppTextStyles.caption),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _destinationController,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.flag),
-                hintText: "Enter destination",
-                filled: true,
-                fillColor: AppColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: AppColors.border),
+                  onChanged: (_) {
+                    if (_useCurrentLocation) {
+                      setState(() => _useCurrentLocation = false);
+                    }
+                  },
                 ),
               ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // ---------- STOPS ----------
-            Text("Charging stops", style: AppTextStyles.caption),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                IconButton(
-                  onPressed: _stops > 0 ? () => setState(() => _stops--) : null,
-                  icon: const Icon(Icons.remove_circle_outline),
-                ),
-                Text("$_stops", style: AppTextStyles.title),
-                IconButton(
-                  onPressed: () => setState(() => _stops++),
-                  icon: const Icon(Icons.add_circle_outline),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // ---------- ARRIVAL ----------
-            Text("Arrival battery (%)", style: AppTextStyles.caption),
-            Slider(
-              value: _arrivalPercent,
-              min: 10,
-              max: 80,
-              divisions: 14,
-              label: "${_arrivalPercent.round()}%",
-              onChanged: (v) => setState(() => _arrivalPercent = v),
-            ),
-
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Text(_error!, style: AppTextStyles.caption),
+              IconButton(
+                icon: const Icon(Icons.my_location),
+                onPressed: _setCurrentLocationAsStart,
+              ),
             ],
+          ),
 
-            const SizedBox(height: 32),
+          const SizedBox(height: 16),
 
-            // ---------- CALCULATE ----------
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _onCalculate,
-                child: const Text("Calculate route"),
-              ),
+          // DESTINATION
+          TextField(
+            controller: _destinationController,
+            decoration: const InputDecoration(
+              labelText: "Destination",
+              hintText: "City, street, country",
             ),
-          ],
-        ),
+          ),
+
+          const SizedBox(height: 24),
+
+          Text("Charging stops: $_stops"),
+          Slider(
+            value: _stops.toDouble(),
+            min: 0,
+            max: 5,
+            divisions: 5,
+            onChanged: (v) => setState(() => _stops = v.round()),
+          ),
+
+          const SizedBox(height: 16),
+
+          Text("Arrival battery: ${_arrivalPercent.round()}%"),
+          Slider(
+            value: _arrivalPercent,
+            min: 10,
+            max: 80,
+            divisions: 7,
+            onChanged: (v) => setState(() => _arrivalPercent = v),
+          ),
+
+          const SizedBox(height: 24),
+
+          if (_error != null) Text(_error!, style: AppTextStyles.caption),
+
+          ElevatedButton(
+            onPressed: _loading ? null : _planRoute,
+            child: _loading
+                ? const CircularProgressIndicator(strokeWidth: 2)
+                : const Text("Plan Route"),
+          ),
+        ],
       ),
     );
   }

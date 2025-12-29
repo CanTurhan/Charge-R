@@ -11,7 +11,6 @@ class OcmStation {
 
   factory OcmStation.fromJson(Map<String, dynamic> json) {
     final addr = json['AddressInfo'];
-
     return OcmStation(
       id: json['ID'],
       title: addr?['Title'] ?? 'Charging Station',
@@ -31,7 +30,7 @@ class OpenChargeMapService {
     required double lat,
     required double lng,
     double distanceKm = 20,
-    int maxResults = 100,
+    int maxResults = 10,
   }) async {
     final uri = Uri.parse(_baseUrl).replace(
       queryParameters: {
@@ -55,5 +54,22 @@ class OpenChargeMapService {
 
     final List data = jsonDecode(res.body);
     return data.map((e) => OcmStation.fromJson(e)).toList();
+  }
+
+  /// 🔑 ROUTE PLANNER İÇİN
+  /// Verilen noktaya EN YAKIN istasyonu döner
+  static Future<OcmStation?> findClosestStation({
+    required double lat,
+    required double lng,
+  }) async {
+    final list = await fetchNearby(
+      lat: lat,
+      lng: lng,
+      distanceKm: 30,
+      maxResults: 1,
+    );
+
+    if (list.isEmpty) return null;
+    return list.first;
   }
 }
