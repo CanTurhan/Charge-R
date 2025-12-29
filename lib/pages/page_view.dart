@@ -3,7 +3,7 @@ import 'package:geolocator/geolocator.dart';
 
 import 'stations_view.dart';
 import 'calculate_view.dart';
-import 'questions_view.dart';
+import 'route_planner_view.dart';
 import 'profile_view.dart';
 import '../theme/colors.dart';
 
@@ -22,7 +22,7 @@ class _AppPageViewState extends State<AppPageView> {
   final _pages = const [
     StationsView(),
     CalculateView(),
-    QuestionsView(),
+    RoutePlannerView(),
     ProfileView(),
   ];
 
@@ -73,7 +73,7 @@ class _AppPageViewState extends State<AppPageView> {
           BottomNavigationBarItem(icon: Icon(Icons.bolt), label: "Calculate"),
           BottomNavigationBarItem(
             icon: Icon(Icons.help_outline),
-            label: "Questions",
+            label: "Route",
           ),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
         ],
