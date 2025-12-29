@@ -12,11 +12,6 @@ class PlaceSuggestion {
 class GeocodingService {
   static const _baseUrl = 'https://nominatim.openstreetmap.org';
 
-  static const _headers = {
-    'User-Agent': 'Charge-R/1.0 (contact@charger.app)',
-    'Accept': 'application/json',
-  };
-
   static Future<List<PlaceSuggestion>> searchSuggestions(
     String query, {
     int limit = 6,
@@ -27,12 +22,16 @@ class GeocodingService {
       queryParameters: {
         'q': query,
         'format': 'json',
-        'addressdetails': '1',
         'limit': limit.toString(),
+        'addressdetails': '1',
       },
     );
 
-    final res = await http.get(uri, headers: _headers);
+    final res = await http.get(
+      uri,
+      headers: {'User-Agent': 'Charge-R Flutter App'},
+    );
+
     if (res.statusCode != 200) return [];
 
     final List data = jsonDecode(res.body);
@@ -46,7 +45,8 @@ class GeocodingService {
 
   static Future<LatLng?> addressToLatLng(String address) async {
     final list = await searchSuggestions(address, limit: 1);
-    return list.isEmpty ? null : list.first.point;
+    if (list.isEmpty) return null;
+    return list.first.point;
   }
 
   static Future<String?> reverseGeocode(LatLng point) async {
@@ -58,7 +58,11 @@ class GeocodingService {
       },
     );
 
-    final res = await http.get(uri, headers: _headers);
+    final res = await http.get(
+      uri,
+      headers: {'User-Agent': 'Charge-R Flutter App'},
+    );
+
     if (res.statusCode != 200) return null;
 
     final data = jsonDecode(res.body);
