@@ -6,76 +6,62 @@ class PlaceSuggestion {
   final String displayName;
   final LatLng point;
 
-  const PlaceSuggestion({required this.displayName, required this.point});
-
-  factory PlaceSuggestion.fromJson(Map<String, dynamic> json) {
-    return PlaceSuggestion(
-      displayName: (json['display_name'] ?? '').toString(),
-      point: LatLng(
-        double.parse(json['lat'].toString()),
-        double.parse(json['lon'].toString()),
-      ),
-    );
-  }
+  PlaceSuggestion({required this.displayName, required this.point});
 }
 
 class GeocodingService {
-  static const String _base = 'https://nominatim.openstreetmap.org';
+  static const _baseUrl = 'https://nominatim.openstreetmap.org';
 
-  static Map<String, String> _headers() => {
-    // Nominatim tarafında User-Agent şart.
-    'User-Agent': 'Charge-R Flutter App',
+  static const _headers = {
+    'User-Agent': 'Charge-R/1.0 (contact@charger.app)',
     'Accept': 'application/json',
   };
 
-  /// Autocomplete suggestions (Kadıköy, Çankaya, Amsterdam vs.)
   static Future<List<PlaceSuggestion>> searchSuggestions(
     String query, {
     int limit = 6,
   }) async {
-    final q = query.trim();
-    if (q.isEmpty) return [];
+    if (query.trim().isEmpty) return [];
 
-    final uri = Uri.parse('$_base/search').replace(
+    final uri = Uri.parse('$_baseUrl/search').replace(
       queryParameters: {
-        'q': q,
+        'q': query,
         'format': 'json',
         'addressdetails': '1',
         'limit': limit.toString(),
       },
     );
 
-    final res = await http.get(uri, headers: _headers());
+    final res = await http.get(uri, headers: _headers);
     if (res.statusCode != 200) return [];
 
     final List data = jsonDecode(res.body);
-    return data.map((e) => PlaceSuggestion.fromJson(e)).toList();
+    return data.map((e) {
+      return PlaceSuggestion(
+        displayName: e['display_name'],
+        point: LatLng(double.parse(e['lat']), double.parse(e['lon'])),
+      );
+    }).toList();
   }
 
-  /// String address -> LatLng (first match)
   static Future<LatLng?> addressToLatLng(String address) async {
     final list = await searchSuggestions(address, limit: 1);
-    if (list.isEmpty) return null;
-    return list.first.point;
+    return list.isEmpty ? null : list.first.point;
   }
 
-  /// LatLng -> readable name (for Start default text)
   static Future<String?> reverseGeocode(LatLng point) async {
-    final uri = Uri.parse('$_base/reverse').replace(
+    final uri = Uri.parse('$_baseUrl/reverse').replace(
       queryParameters: {
-        'format': 'json',
         'lat': point.latitude.toString(),
         'lon': point.longitude.toString(),
-        'zoom': '16',
+        'format': 'json',
       },
     );
 
-    final res = await http.get(uri, headers: _headers());
+    final res = await http.get(uri, headers: _headers);
     if (res.statusCode != 200) return null;
 
-    final Map data = jsonDecode(res.body);
-    return (data['display_name'] ?? '').toString().trim().isEmpty
-        ? null
-        : data['display_name'].toString();
+    final data = jsonDecode(res.body);
+    return data['display_name'];
   }
 }

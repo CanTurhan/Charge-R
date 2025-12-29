@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 
 import '../services/geocoding_service.dart';
 import '../services/route_planner.dart';
@@ -20,6 +21,7 @@ class RoutePlannerView extends StatefulWidget {
 class _RoutePlannerViewState extends State<RoutePlannerView> {
   final _startController = TextEditingController();
   final _destController = TextEditingController();
+  final _stopsController = TextEditingController(text: "2");
 
   Timer? _startDebounce;
   Timer? _destDebounce;
@@ -27,11 +29,10 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
   bool _loading = false;
   String? _error;
 
-  // UI state
   bool _startUseCurrent = true;
 
-  int _stops = 2; // 1-100
-  double _arrivalPercent = 40; // 0-100
+  int _stops = 2;
+  double _arrivalPercent = 40;
 
   LatLng? _startLatLng;
   LatLng? _destLatLng;
@@ -41,9 +42,6 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
 
   RoutePlanResult? _plan;
 
-  // --- VEHICLE RANGE (şimdilik stub) ---
-  // Sonraki adım: Profile'dan araç modeli -> menzil çekilecek.
-  // Şimdilik örnek: 420 km
   double _vehicleRangeKm = 420;
 
   @override
@@ -56,11 +54,13 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
   void dispose() {
     _startController.dispose();
     _destController.dispose();
+    _stopsController.dispose();
     _startDebounce?.cancel();
     _destDebounce?.cancel();
     super.dispose();
   }
 
+  // ---------- LOCATION ----------
   Future<void> _bootstrapCurrentLocation() async {
     try {
       final pos = await _getCurrentPosition();
@@ -74,14 +74,11 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
         _startUseCurrent = true;
         _startController.text = name ?? "Current location";
       });
-    } catch (_) {
-      // sessiz geç; kullanıcı elle yazabilir
-    }
+    } catch (_) {}
   }
 
   Future<Position> _getCurrentPosition() async {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
+    if (!await Geolocator.isLocationServiceEnabled()) {
       throw Exception("Location services are disabled");
     }
 
@@ -90,10 +87,6 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.deniedForever) {
-      throw Exception("Location permission denied forever");
-    }
-    if (permission != LocationPermission.always &&
-        permission != LocationPermission.whileInUse) {
       throw Exception("Location permission denied");
     }
 
@@ -142,12 +135,6 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
   }
 
   Future<void> _useCurrentLocationAsStart() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-      _plan = null;
-    });
-
     try {
       final pos = await _getCurrentPosition();
       final latLng = LatLng(pos.latitude, pos.longitude);
@@ -162,11 +149,7 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
         _startSuggestions = [];
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
-    } finally {
-      if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() => _error = e.toString());
     }
   }
 
@@ -179,30 +162,35 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
     });
 
     try {
-      // START
+      // Validate stops
+      final stopsText = _stopsController.text.trim();
+      final parsedStops = int.tryParse(stopsText);
+      if (parsedStops == null || parsedStops < 1 || parsedStops > 100) {
+        throw Exception("Charging stops must be between 1 and 100");
+      }
+      _stops = parsedStops;
+
+      // Start
       if (_startUseCurrent) {
         final pos = await _getCurrentPosition();
         _startLatLng = LatLng(pos.latitude, pos.longitude);
-      } else {
-        if (_startLatLng == null) {
-          final txt = _startController.text.trim();
-          if (txt.isEmpty) throw Exception("Start location is required");
-          _startLatLng = await GeocodingService.addressToLatLng(txt);
-        }
+      } else if (_startLatLng == null) {
+        _startLatLng = await GeocodingService.addressToLatLng(
+          _startController.text,
+        );
       }
 
       if (_startLatLng == null) throw Exception("Start location not found");
 
-      // DEST
+      // Destination
       if (_destLatLng == null) {
-        final txt = _destController.text.trim();
-        if (txt.isEmpty) throw Exception("Destination is required");
-        _destLatLng = await GeocodingService.addressToLatLng(txt);
+        _destLatLng = await GeocodingService.addressToLatLng(
+          _destController.text,
+        );
       }
 
       if (_destLatLng == null) throw Exception("Destination not found");
 
-      // Compute
       final result = await RoutePlannerService.plan(
         start: _startLatLng!,
         destination: _destLatLng!,
@@ -211,28 +199,22 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
         vehicleRangeKm: _vehicleRangeKm,
       );
 
-      if (!mounted) return;
       setState(() => _plan = result);
-
       if (!result.ok) {
-        setState(() => _error = result.message ?? "Plan failed");
+        setState(() => _error = result.message);
       }
     } catch (e) {
-      if (!mounted) return;
       setState(() => _error = e.toString().replaceAll('Exception: ', ''));
     } finally {
-      if (!mounted) return;
       setState(() => _loading = false);
     }
   }
 
-  // ---------- OPEN IN MAPS ----------
+  // ---------- OPEN MAPS ----------
   Future<void> _openInMaps() async {
     final plan = _plan;
     if (plan == null || !plan.ok) return;
 
-    // Basit: Google Maps Directions URL (waypoints)
-    // https://www.google.com/maps/dir/?api=1&origin=..&destination=..&waypoints=..
     final origin = '${_startLatLng!.latitude},${_startLatLng!.longitude}';
     final dest = '${_destLatLng!.latitude},${_destLatLng!.longitude}';
 
@@ -240,64 +222,19 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
         .map((s) => '${s.station.point.latitude},${s.station.point.longitude}')
         .join('|');
 
-    final googleUri = Uri.parse('https://www.google.com/maps/dir/').replace(
+    final uri = Uri.parse('https://www.google.com/maps/dir/').replace(
       queryParameters: {
         'api': '1',
         'origin': origin,
         'destination': dest,
         if (waypoints.isNotEmpty) 'waypoints': waypoints,
-        'travelmode': 'driving',
       },
     );
 
-    if (await canLaunchUrl(googleUri)) {
-      await launchUrl(googleUri, mode: LaunchMode.externalApplication);
-      return;
-    }
-
-    // fallback Apple Maps
-    final appleUri = Uri.parse(
-      'http://maps.apple.com/',
-    ).replace(queryParameters: {'saddr': origin, 'daddr': dest});
-    await launchUrl(appleUri, mode: LaunchMode.externalApplication);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  // ---------- UI HELPERS ----------
-  Widget _suggestionList(
-    List<PlaceSuggestion> list,
-    void Function(PlaceSuggestion) onSelect,
-  ) {
-    if (list.isEmpty) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: list.length,
-        separatorBuilder: (_, __) =>
-            Divider(height: 1, color: AppColors.border),
-        itemBuilder: (_, i) {
-          final s = list[i];
-          return ListTile(
-            dense: true,
-            title: Text(
-              s.displayName,
-              style: AppTextStyles.caption,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            onTap: () => onSelect(s),
-          );
-        },
-      ),
-    );
-  }
-
+  // ---------- UI ----------
   @override
   Widget build(BuildContext context) {
     final plan = _plan;
@@ -315,56 +252,41 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
               Expanded(
                 child: TextField(
                   controller: _startController,
-                  decoration: const InputDecoration(
-                    labelText: "Start",
-                    hintText: "Current location or enter address",
-                  ),
+                  decoration: const InputDecoration(labelText: "Start"),
                   onChanged: _onStartChanged,
-                  onTap: () => setState(() => _startUseCurrent = false),
+                  onTap: () => _startUseCurrent = false,
                 ),
               ),
-              const SizedBox(width: 8),
               IconButton(
-                tooltip: "Use current location",
-                onPressed: _loading ? null : _useCurrentLocationAsStart,
                 icon: const Icon(Icons.my_location),
+                onPressed: _useCurrentLocationAsStart,
               ),
             ],
-          ),
-          _suggestionList(_startSuggestions, _selectStartSuggestion),
-
-          const SizedBox(height: 16),
-
-          // DESTINATION
-          TextField(
-            controller: _destController,
-            decoration: const InputDecoration(
-              labelText: "Destination",
-              hintText: "Kadıköy, Çankaya, Amsterdam, Big Ben...",
-            ),
-            onChanged: _onDestChanged,
-          ),
-          _suggestionList(_destSuggestions, _selectDestSuggestion),
-
-          const SizedBox(height: 24),
-
-          // STOPS (1-100)
-          Text("Charging stops: $_stops", style: AppTextStyles.caption),
-          Slider(
-            value: _stops.toDouble(),
-            min: 1,
-            max: 100,
-            divisions: 99,
-            onChanged: (v) => setState(() => _stops = v.round()),
           ),
 
           const SizedBox(height: 12),
 
-          // ARRIVAL %
-          Text(
-            "Arrival battery: ${_arrivalPercent.round()}%",
-            style: AppTextStyles.caption,
+          // DEST
+          TextField(
+            controller: _destController,
+            decoration: const InputDecoration(labelText: "Destination"),
+            onChanged: _onDestChanged,
           ),
+
+          const SizedBox(height: 16),
+
+          // STOPS
+          Text("Charging stops (1–100)", style: AppTextStyles.caption),
+          TextField(
+            controller: _stopsController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ARRIVAL %
+          Text("Arrival battery: ${_arrivalPercent.round()}%"),
           Slider(
             value: _arrivalPercent,
             min: 0,
@@ -373,75 +295,28 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
             onChanged: (v) => setState(() => _arrivalPercent = v),
           ),
 
-          const SizedBox(height: 16),
-
-          if (_error != null) ...[
-            Text(_error!, style: AppTextStyles.caption),
-            const SizedBox(height: 8),
-          ],
+          if (_error != null) Text(_error!, style: AppTextStyles.caption),
 
           ElevatedButton(
             onPressed: _loading ? null : _planRoute,
             child: _loading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const CircularProgressIndicator()
                 : const Text("Plan Route"),
           ),
 
-          const SizedBox(height: 16),
-
-          // RESULT
-          if (plan != null) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+          if (plan != null && plan.ok) ...[
+            const SizedBox(height: 16),
+            Text("Stops", style: AppTextStyles.title),
+            ...plan.stops.map(
+              (s) => Text(
+                "• ${s.station.title} — %${s.departPercent}",
+                style: AppTextStyles.caption,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Result", style: AppTextStyles.title),
-                  const SizedBox(height: 8),
-                  Text(
-                    "Total distance: ${plan.totalDistanceKm.toStringAsFixed(1)} km",
-                    style: AppTextStyles.caption,
-                  ),
-                  Text(
-                    "Requested stops: ${plan.requestedStops}",
-                    style: AppTextStyles.caption,
-                  ),
-                  Text(
-                    "Min required stops: ${plan.requiredStopsMin}",
-                    style: AppTextStyles.caption,
-                  ),
-                  const SizedBox(height: 12),
-
-                  if (plan.ok) ...[
-                    Text("Stops & departure SOC", style: AppTextStyles.title),
-                    const SizedBox(height: 8),
-                    ...plan.stops.map(
-                      (s) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          "• ${s.station.title} — depart with %${s.departPercent}",
-                          style: AppTextStyles.caption,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton.icon(
-                      onPressed: _openInMaps,
-                      icon: const Icon(Icons.map),
-                      label: const Text("Open in Maps"),
-                    ),
-                  ],
-                ],
-              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _openInMaps,
+              child: const Text("Open in Maps"),
             ),
           ],
         ],

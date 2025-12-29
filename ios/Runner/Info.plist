@@ -10,9 +10,16 @@
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>We use your location to show nearby EV charging stations.</string>
 
-    <!-- OPTIONAL (macOS runtime safety, zararı yok) -->
+    <!-- OPTIONAL (legacy, zararı yok) -->
     <key>NSLocationUsageDescription</key>
     <string>We use your location to show nearby EV charging stations.</string>
+
+    <!-- APP TRANSPORT SECURITY (Nominatim + OpenStreetMap için GEREKLİ) -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
 
     <!-- APP CONFIG -->
     <key>CADisableMinimumFrameDurationOnPhone</key>
