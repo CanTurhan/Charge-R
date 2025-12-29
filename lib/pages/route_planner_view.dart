@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/geocoding_service.dart';
 import '../services/open_charge_map_service.dart';
-import '../utils/route_utils.dart';
 import '../theme/text_styles.dart';
+import '../theme/colors.dart';
 
 class RoutePlannerView extends StatefulWidget {
   const RoutePlannerView({super.key});
@@ -15,22 +16,24 @@ class RoutePlannerView extends StatefulWidget {
 }
 
 class _RoutePlannerViewState extends State<RoutePlannerView> {
-  final TextEditingController _startController = TextEditingController();
-  final TextEditingController _destinationController = TextEditingController();
+  final _startController = TextEditingController();
+  final _destinationController = TextEditingController();
 
   bool _useCurrentLocation = true;
   bool _loading = false;
   String? _error;
 
-  int _stops = 2;
+  int _stops = 1;
   double _arrivalPercent = 40;
 
   LatLng? _startLatLng;
   LatLng? _destinationLatLng;
 
-  // ---------------- CURRENT LOCATION ----------------
+  List<OcmStation> _plannedStops = [];
 
-  Future<void> _setCurrentLocationAsStart() async {
+  // ---------------- LOCATION ----------------
+
+  Future<LatLng> _getCurrentLocation() async {
     final permission = await Geolocator.requestPermission();
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
@@ -41,11 +44,7 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
       desiredAccuracy: LocationAccuracy.high,
     );
 
-    setState(() {
-      _useCurrentLocation = true;
-      _startLatLng = LatLng(pos.latitude, pos.longitude);
-      _startController.text = "Current location";
-    });
+    return LatLng(pos.latitude, pos.longitude);
   }
 
   // ---------------- PLAN ROUTE ----------------
@@ -54,31 +53,30 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
     setState(() {
       _loading = true;
       _error = null;
+      _plannedStops = [];
     });
 
     try {
       // START
       if (_useCurrentLocation) {
-        if (_startLatLng == null) {
-          await _setCurrentLocationAsStart();
-        }
+        _startLatLng = await _getCurrentLocation();
       } else {
         if (_startController.text.trim().isEmpty) {
-          throw Exception("Enter a start location");
+          throw Exception("Enter start location");
         }
 
         _startLatLng = await GeocodingService.addressToLatLng(
           _startController.text,
         );
+      }
 
-        if (_startLatLng == null) {
-          throw Exception("Start location not found");
-        }
+      if (_startLatLng == null) {
+        throw Exception("Start location not found");
       }
 
       // DESTINATION
       if (_destinationController.text.trim().isEmpty) {
-        throw Exception("Enter a destination");
+        throw Exception("Enter destination");
       }
 
       _destinationLatLng = await GeocodingService.addressToLatLng(
@@ -89,21 +87,43 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
         throw Exception("Destination not found");
       }
 
-      // STOPS
-      final stops = RouteUtils.splitRoute(
-        start: _startLatLng!,
-        end: _destinationLatLng!,
-        stops: _stops,
-      );
+      // BASIC FEASIBILITY CHECK
+      if (_stops <= 0) {
+        throw Exception("At least 1 charging stop is required");
+      }
 
-      for (int i = 0; i < stops.length; i++) {
-        final station = await OpenChargeMapService.findClosestStation(
-          lat: stops[i].latitude,
-          lng: stops[i].longitude,
+      // MIDPOINT-BASED STOP SEARCH
+      final segments = _stops + 1;
+      final latStep =
+          (_destinationLatLng!.latitude - _startLatLng!.latitude) / segments;
+      final lngStep =
+          (_destinationLatLng!.longitude - _startLatLng!.longitude) / segments;
+
+      final List<OcmStation> stops = [];
+
+      for (int i = 1; i <= _stops; i++) {
+        final mid = LatLng(
+          _startLatLng!.latitude + latStep * i,
+          _startLatLng!.longitude + lngStep * i,
         );
 
-        debugPrint("STOP ${i + 1}: ${station?.title}");
+        final nearby = await OpenChargeMapService.fetchNearby(
+          lat: mid.latitude,
+          lng: mid.longitude,
+          distanceKm: 30,
+          maxResults: 1,
+        );
+
+        if (nearby.isEmpty) {
+          throw Exception("More charging stops required for this plan");
+        }
+
+        stops.add(nearby.first);
       }
+
+      setState(() {
+        _plannedStops = stops;
+      });
     } catch (e) {
       setState(() {
         _error = e.toString().replaceAll('Exception: ', '');
@@ -111,6 +131,20 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  // ---------------- OPEN MAPS ----------------
+
+  Future<void> _openInMaps() async {
+    if (_startLatLng == null || _destinationLatLng == null) return;
+
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/'
+      '${_startLatLng!.latitude},${_startLatLng!.longitude}/'
+      '${_destinationLatLng!.latitude},${_destinationLatLng!.longitude}',
+    );
+
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   // ---------------- UI ----------------
@@ -130,20 +164,19 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
               Expanded(
                 child: TextField(
                   controller: _startController,
-                  decoration: const InputDecoration(
-                    labelText: "Start",
-                    hintText: "Current location or address",
-                  ),
-                  onChanged: (_) {
-                    if (_useCurrentLocation) {
-                      setState(() => _useCurrentLocation = false);
-                    }
-                  },
+                  enabled: !_useCurrentLocation,
+                  decoration: const InputDecoration(labelText: "Start"),
+                  onTap: () => setState(() => _useCurrentLocation = false),
                 ),
               ),
               IconButton(
                 icon: const Icon(Icons.my_location),
-                onPressed: _setCurrentLocationAsStart,
+                onPressed: () {
+                  setState(() {
+                    _useCurrentLocation = true;
+                    _startController.clear();
+                  });
+                },
               ),
             ],
           ),
@@ -153,10 +186,7 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
           // DESTINATION
           TextField(
             controller: _destinationController,
-            decoration: const InputDecoration(
-              labelText: "Destination",
-              hintText: "City, street, country",
-            ),
+            decoration: const InputDecoration(labelText: "Destination"),
           ),
 
           const SizedBox(height: 24),
@@ -164,13 +194,11 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
           Text("Charging stops: $_stops"),
           Slider(
             value: _stops.toDouble(),
-            min: 0,
+            min: 1,
             max: 5,
-            divisions: 5,
+            divisions: 4,
             onChanged: (v) => setState(() => _stops = v.round()),
           ),
-
-          const SizedBox(height: 16),
 
           Text("Arrival battery: ${_arrivalPercent.round()}%"),
           Slider(
@@ -183,14 +211,41 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
 
           const SizedBox(height: 24),
 
-          if (_error != null) Text(_error!, style: AppTextStyles.caption),
-
           ElevatedButton(
             onPressed: _loading ? null : _planRoute,
             child: _loading
                 ? const CircularProgressIndicator(strokeWidth: 2)
                 : const Text("Plan Route"),
           ),
+
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: AppTextStyles.caption),
+          ],
+
+          const SizedBox(height: 24),
+
+          // STOP LIST
+          if (_plannedStops.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Charging stops", style: AppTextStyles.title),
+                const SizedBox(height: 8),
+                ..._plannedStops.asMap().entries.map(
+                  (e) => ListTile(
+                    leading: const Icon(Icons.ev_station, color: Colors.green),
+                    title: Text("Stop ${e.key + 1}: ${e.value.title}"),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _openInMaps,
+                  icon: const Icon(Icons.map),
+                  label: const Text("Open in Maps"),
+                ),
+              ],
+            ),
         ],
       ),
     );
