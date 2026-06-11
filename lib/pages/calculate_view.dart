@@ -129,9 +129,7 @@ class _CalculateViewState extends State<CalculateView> {
               _profileBadge(),
               const SizedBox(height: 16),
 
-              _vehicleSection(),
-              const SizedBox(height: 16),
-
+              // ✅ sadece buradaki sıralama değişti
               _usageSection(),
               const SizedBox(height: 16),
 
@@ -142,6 +140,10 @@ class _CalculateViewState extends State<CalculateView> {
               const SizedBox(height: 24),
 
               _resultCard(),
+              const SizedBox(height: 32),
+
+              // ✅ Manual override en altta
+              _vehicleSection(),
             ],
           ),
         );
@@ -221,7 +223,7 @@ class _CalculateViewState extends State<CalculateView> {
       child: Column(
         children: [
           DropdownButtonFormField<String>(
-            value: selectedBrand,
+            initialValue: selectedBrand,
             hint: const Text("Brand"),
             items: VehicleData.brands
                 .map((b) => DropdownMenuItem(value: b, child: Text(b)))
