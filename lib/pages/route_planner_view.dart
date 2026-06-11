@@ -42,8 +42,10 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
 
   RoutePlanResult? _plan;
 
-  // geçici — profile’dan çekilecek
-  final double _vehicleRangeKm = 420;
+  /// ⚠️ ŞİMDİLİK:
+  /// Profile entegrasyonu bir sonraki adımda
+  /// Şu an gerçek hesaplar için tek kaynak burası
+  final double _vehicleFullRangeKm = 420;
 
   @override
   void initState() {
@@ -75,7 +77,9 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
         _useCurrentStart = true;
         _startController.text = name ?? 'Current location';
       });
-    } catch (_) {}
+    } catch (_) {
+      // sessiz geç
+    }
   }
 
   Future<Position> _getCurrentPosition() async {
@@ -168,6 +172,7 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
         throw Exception('Charging stops must be between 1 and 100');
       }
 
+      // START
       if (_useCurrentStart) {
         final pos = await _getCurrentPosition();
         _startLatLng = LatLng(pos.latitude, pos.longitude);
@@ -179,6 +184,7 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
 
       if (_startLatLng == null) throw Exception('Start not found');
 
+      // DEST
       if (_destLatLng == null) {
         _destLatLng = await GeocodingService.addressToLatLng(
           _destController.text,
@@ -192,13 +198,15 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
         destination: _destLatLng!,
         stopsRequested: _stops,
         arrivalPercentTarget: _arrivalPercent.round(),
-        vehicleRangeKm: _vehicleRangeKm,
+        vehicleFullRangeKm: _vehicleFullRangeKm,
       );
 
       setState(() => _plan = result);
       if (!result.ok) _error = result.message;
     } catch (e) {
-      _error = e.toString().replaceAll('Exception: ', '');
+      setState(() {
+        _error = e.toString().replaceAll('Exception: ', '');
+      });
     } finally {
       setState(() => _loading = false);
     }
@@ -237,14 +245,25 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
         padding: const EdgeInsets.all(16),
         children: [
           Text('Route Planner', style: AppTextStyles.headline),
-
           const SizedBox(height: 16),
 
-          TextField(
-            controller: _startController,
-            decoration: const InputDecoration(labelText: 'Start'),
-            onChanged: _onStartChanged,
-            onTap: () => _useCurrentStart = false,
+          // START
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _startController,
+                  decoration: const InputDecoration(labelText: 'Start'),
+                  onChanged: _onStartChanged,
+                  onTap: () => _useCurrentStart = false,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.my_location),
+                onPressed: _initCurrentLocation,
+              ),
+            ],
           ),
           _suggestions(_startSuggestions, (s) {
             _startLatLng = s.point;
@@ -256,6 +275,7 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
 
           const SizedBox(height: 12),
 
+          // DEST
           TextField(
             controller: _destController,
             decoration: const InputDecoration(labelText: 'Destination'),
@@ -270,6 +290,7 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
 
           const SizedBox(height: 12),
 
+          // STOPS
           TextField(
             controller: _stopsController,
             decoration: const InputDecoration(
@@ -281,6 +302,7 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
 
           const SizedBox(height: 12),
 
+          // ARRIVAL %
           Text('Arrival battery: ${_arrivalPercent.round()}%'),
           Slider(
             value: _arrivalPercent,
@@ -308,6 +330,7 @@ class _RoutePlannerViewState extends State<RoutePlannerView> {
                 style: AppTextStyles.caption,
               ),
             ),
+            const SizedBox(height: 12),
             ElevatedButton(
               onPressed: _openInMaps,
               child: const Text('Open in Maps'),

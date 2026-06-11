@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../components/station_pin_marker.dart';
 import '../services/open_charge_map_service.dart';
 import '../theme/text_styles.dart';
 import '../theme/colors.dart';
@@ -67,10 +68,12 @@ class _StationsViewState extends State<StationsView> {
 
       await _loadStationsForCenter(latLng);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString().replaceAll('Exception: ', '');
       });
     } finally {
+      if (!mounted) return;
       setState(() => _loading = false);
     }
   }
@@ -88,6 +91,7 @@ class _StationsViewState extends State<StationsView> {
       if (!mounted) return;
       setState(() => _stations = stations);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString().replaceAll('Exception: ', '');
       });
@@ -219,17 +223,13 @@ class _StationsViewState extends State<StationsView> {
                     ),
                     ..._stations.map(
                       (s) => Marker(
-                        width: 44,
-                        height: 44,
+                        width: 48,
+                        height: 56,
                         point: s.point,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => _openStationDetail(s),
-                          child: const Icon(
-                            Icons.ev_station,
-                            color: Colors.greenAccent,
-                            size: 32,
-                          ),
+                          child: const StationPinMarker(size: 38),
                         ),
                       ),
                     ),

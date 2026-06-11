@@ -30,6 +30,15 @@ class RangeCalculator {
     return (usableEnergy / effectiveConsumption) * 100;
   }
 
+  // ✅ ROUTE PLANNER İÇİN – %100 GERÇEK MENZİL
+  static double fullRangeKm({
+    required VehicleModel vehicle,
+    required double degradationFactor,
+  }) {
+    final usableKwh = vehicle.batteryCapacity * degradationFactor;
+    return (usableKwh / vehicle.baseConsumption) * 100;
+  }
+
   static double _speedFactor(double speed) {
     if (speed <= 90) return 1.0;
     if (speed <= 110) return 1.1;
