@@ -23,36 +23,45 @@ class _StationsViewState extends State<StationsView> {
 
   bool _loading = false;
   String? _error;
+  String? _permissionMessage;
 
   LatLng _center = const LatLng(41.0082, 28.9784);
   List<OcmStation> _stations = [];
 
-  // ---------------- LOCATION ----------------
+  @override
+  void initState() {
+    super.initState();
 
-  Future<void> _useMyLocation() async {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadInitialLocation();
+    });
+  }
+
+  @override
+  void dispose() {
+    _mapMoveDebounce?.cancel();
+    super.dispose();
+  }
+
+  // ---------------- INITIAL LOCATION ----------------
+
+  Future<void> _loadInitialLocation() async {
     setState(() {
       _loading = true;
       _error = null;
+      _permissionMessage = null;
     });
 
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw Exception("Location services are disabled");
-      }
+      final hasPermission = await _ensureLocationPermission();
 
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        _showOpenSettingsDialog();
+      if (!hasPermission) {
+        if (!mounted) return;
+        setState(() {
+          _permissionMessage =
+              "To see nearby charging stations, please allow location access.";
+        });
         return;
-      }
-
-      if (permission != LocationPermission.always &&
-          permission != LocationPermission.whileInUse) {
-        throw Exception("Location permission denied");
       }
 
       final pos = await Geolocator.getCurrentPosition(
@@ -63,9 +72,12 @@ class _StationsViewState extends State<StationsView> {
 
       if (!mounted) return;
 
-      setState(() => _center = latLng);
-      _mapController.move(latLng, 13);
+      setState(() {
+        _center = latLng;
+        _permissionMessage = null;
+      });
 
+      _mapController.move(latLng, 13);
       await _loadStationsForCenter(latLng);
     } catch (e) {
       if (!mounted) return;
@@ -76,6 +88,41 @@ class _StationsViewState extends State<StationsView> {
       if (!mounted) return;
       setState(() => _loading = false);
     }
+  }
+
+  Future<bool> _ensureLocationPermission() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      setState(() {
+        _permissionMessage =
+            "Location services are disabled. Please enable location services to see nearby charging stations.";
+      });
+      return false;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied) {
+      return false;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      _showOpenSettingsDialog();
+      return false;
+    }
+
+    return permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+  }
+
+  // ---------------- LOCATION BUTTON ----------------
+
+  Future<void> _useMyLocation() async {
+    await _loadInitialLocation();
   }
 
   // ---------------- OCM ----------------
@@ -154,7 +201,7 @@ class _StationsViewState extends State<StationsView> {
       builder: (_) => AlertDialog(
         title: const Text("Location Permission Needed"),
         content: const Text(
-          "To use your location, please enable location access in Settings.",
+          "To see nearby charging stations, please enable location access in Settings.",
         ),
         actions: [
           TextButton(
@@ -185,57 +232,86 @@ class _StationsViewState extends State<StationsView> {
             child: Text("Stations", style: AppTextStyles.headline),
           ),
 
-          Expanded(
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _center,
-                initialZoom: 12,
-                onPositionChanged: (pos, hasGesture) {
-                  if (!hasGesture) return;
-
-                  _mapMoveDebounce?.cancel();
-                  _mapMoveDebounce = Timer(
-                    const Duration(milliseconds: 700),
-                    () {
-                      final c = pos.center;
-                      if (c != null) _loadStationsForCenter(c);
-                    },
-                  );
-                },
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.canturhan.charge_r',
+          if (_permissionMessage != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
                 ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      width: 44,
-                      height: 44,
-                      point: _center,
-                      child: const Icon(
-                        Icons.my_location,
-                        color: AppColors.accent,
-                        size: 36,
-                      ),
+                child: Text(_permissionMessage!, style: AppTextStyles.caption),
+              ),
+            ),
+
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(_error!, style: AppTextStyles.caption),
+            ),
+
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _center,
+                    initialZoom: 12,
+                    onPositionChanged: (pos, hasGesture) {
+                      if (!hasGesture) return;
+
+                      _mapMoveDebounce?.cancel();
+                      _mapMoveDebounce = Timer(
+                        const Duration(milliseconds: 700),
+                        () {
+                          final c = pos.center;
+                          if (c != null) _loadStationsForCenter(c);
+                        },
+                      );
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c'],
+                      userAgentPackageName: 'com.canturhan.charge_r',
                     ),
-                    ..._stations.map(
-                      (s) => Marker(
-                        width: 48,
-                        height: 56,
-                        point: s.point,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => _openStationDetail(s),
-                          child: const StationPinMarker(size: 38),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          width: 44,
+                          height: 44,
+                          point: _center,
+                          child: const Icon(
+                            Icons.my_location,
+                            color: AppColors.accent,
+                            size: 36,
+                          ),
                         ),
-                      ),
+                        ..._stations.map(
+                          (s) => Marker(
+                            width: 48,
+                            height: 56,
+                            point: s.point,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _openStationDetail(s),
+                              child: const StationPinMarker(size: 38),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
 
@@ -244,7 +320,11 @@ class _StationsViewState extends State<StationsView> {
             child: ElevatedButton(
               onPressed: _loading ? null : _useMyLocation,
               child: _loading
-                  ? const CircularProgressIndicator(strokeWidth: 2)
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Text("Use my location"),
             ),
           ),
